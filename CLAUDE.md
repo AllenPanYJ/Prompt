@@ -4,88 +4,140 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**智能提示词管理平台**是一个基于浏览器本地存储的单页面应用，专为AI内容创作者设计的提示词管理工具。项目采用纯前端架构，无需后端服务，所有数据存储在localStorage中。
+**智能提示词管理平台** is a single-page web application for AI content creators to manage prompt templates. Uses pure frontend architecture with browser localStorage as the database.
 
-## Architecture
+## Architecture Highlights
 
 ### Technology Stack
-- **Frontend**: HTML5 + TailwindCSS + Vanilla JavaScript
-- **Storage**: Browser localStorage (模拟数据库)
+- **Frontend**: Vanilla JavaScript + TailwindCSS + HTML5
+- **Storage**: Browser localStorage (simulated database)
+- **Styling**: TailwindCSS via CDN
 - **Icons**: Font Awesome 6.4.0
 - **Fonts**: Noto Sans SC (Google Fonts)
+- **Development**: Playwright MCP Server for browser automation
 
-### Core Components
-- `index.html` - 主应用页面（单页面应用）
-- `app.js` - 核心业务逻辑和状态管理
-- 无构建步骤，可直接在浏览器中打开
+### Key Architecture Patterns
+- **Single Page Application**: All pages rendered via JavaScript routing
+- **Event-Driven Architecture**: Direct event binding to DOM elements
+- **Local Storage ORM**: JSON-based CRUD operations
+- **Version Management**: Multi-version prompt support with inline editing
+- **Responsive Design**: Mobile-first with TailwindCSS
 
-### Data Model
-```javascript
-// 用户数据结构
-{
-  username: string,
-  password: string,
-  isAdmin?: boolean
-}
+## Core Files
 
-// 提示词数据结构
-{
-  id: string,
-  title: string,
-  category: string,
-  userId: string,
-  versions: [{id, name, content}],
-  currentVersion: number,
-  createdAt: string,
-  updatedAt: string
-}
+### Main Application Files
+- `index.html` - Single page application shell
+- `app.js` - Complete business logic and state management
+- `package.json` - Dependencies (Playwright MCP only)
+- `mcp.json` - MCP server configuration
+
+### Data Flow
 ```
-
-### Key Features Implemented
-1. **用户认证系统** - 注册/登录/退出，支持管理员权限
-2. **个人工作台** - 提示词CRUD操作，多版本管理
-3. **提示词广场** - 官方模板浏览和使用
-4. **飞书集成** - 配置管理和模拟数据导入
-5. **后台管理** - 管理员专用内容维护界面
+User Interaction → Event Handler → localStorage → DOM Update → Visual Feedback
+```
 
 ## Development Commands
 
 ### Quick Start
 ```bash
-# 直接打开应用
-open index.html
-# 或
-start index.html
+# Open directly in browser
+open index.html                    # macOS
+start index.html                   # Windows
+xdg-open index.html                # Linux
+
+# Install dependencies (if needed)
+npm install
+
+# Start MCP server for browser automation
+npx @playwright/mcp@latest
 ```
 
-### Testing Accounts
-- **普通用户**: user / user123
-- **管理员**: admin / admin123
+### Testing Workflow
+1. **Manual Testing**: Open index.html directly
+2. **Reset Data**: `localStorage.clear()` in browser console
+3. **Test Accounts**: 
+   - Regular: user/user123
+   - Admin: admin/admin123
 
-### Development Features
-- 所有数据存储在浏览器localStorage中
-- 支持热重载（刷新页面即可查看最新更改）
-- 控制台调试：`localStorage.clear()` 可重置所有数据
+## Key Functional Areas
 
-### File Structure
+### 1. Authentication System
+- **Location**: `handleAuth()` in app.js:117-159
+- **Storage**: `users` key in localStorage
+- **Features**: Login/Register, admin detection, session persistence
+
+### 2. Version Management (Latest Refactor)
+- **Location**: `loadVersionsToPanel()` in app.js:416-486
+- **Architecture**: 
+  - Direct click binding to individual icons
+  - `handleVersionRenameByIcon()` for pencil icon
+  - `handleVersionDeleteByIcon()` for delete icon
+  - `event.stopPropagation()` prevents chain reactions
+- **UI**: Hover-reveal icons with smooth transitions
+
+### 3. Data Management
+- **Core Models**:
+  ```javascript
+  // User: {username, password, isAdmin?}
+  // Prompt: {id, title, category, userId, versions[], currentVersion}
+  // Version: {id, name, content}
+  ```
+- **Storage Keys**: `currentUser`, `users`, `prompts`, `squarePrompts`, `categories`
+
+### 4. Page Routing
+- **Router**: `showPage()` in app.js:89-114
+- **Pages**: auth, workbench, square, settings, admin
+- **State**: URL-based routing via data-page attributes
+
+## Development Patterns
+
+### Event Binding Strategy
+- **Direct Binding**: Each icon has its own event listener
+- **No Delegation**: Eliminates chain reaction bugs
+- **Immediate Feedback**: No confirmation dialogs
+- **Clean Removal**: All deprecated handlers removed
+
+### DOM Manipulation
+- **Template Creation**: Dynamic element creation via `document.createElement`
+- **State Sync**: Immediate localStorage update after DOM changes
+- **Visual Feedback**: Toast notifications via `showToast()`
+
+### State Management
+- **Single Source**: localStorage as the only state store
+- **Reactive Updates**: DOM re-renders after state changes
+- **Version Control**: Automatic activation switching on deletion
+
+## Testing Guidelines
+
+### Version Management Testing
+1. Create prompt with multiple versions
+2. Hover over version tags to reveal icons
+3. Click pencil icon: inline rename should trigger
+4. Click X icon: immediate deletion without confirmation
+5. Verify single version hides delete icon
+6. Check activation state switches correctly after deletion
+
+### Browser Console Commands
+```javascript
+// Reset all data
+localStorage.clear(); location.reload();
+
+// View current data
+console.table(JSON.parse(localStorage.getItem('prompts')));
+
+// Test version management
+const prompt = JSON.parse(localStorage.getItem('prompts'))[0];
 ```
-├── index.html          # 主应用页面
-├── app.js             # 核心JavaScript逻辑
-├── 智能提示词管理平台-灵感工作室.html  # 设计原型
-└── CLAUDE.md          # 开发指南
-```
 
-### Key Functions in app.js
-- `initApp()` - 应用初始化
-- `showPage()` - 页面路由管理
-- `loadPrompts()` - 加载个人提示词
-- `manageVersions()` - 版本管理核心功能
-- `importFromFeishu()` - 飞书数据导入
+## Architecture Notes
+- **No Build Step**: Direct browser execution
+- **Zero Dependencies Runtime**: Only TailwindCSS CDN
+- **Offline Capable**: Works without internet after initial load
+- **Mobile Optimized**: Responsive via TailwindCSS
+- **Event Isolation**: Each interaction is completely independent
 
-### Storage Keys
-- `currentUser` - 当前登录用户
-- `users` - 用户数据库
-- `prompts` - 个人提示词数据
-- `squarePrompts` - 广场提示词数据
-- `categories` - 个人分类
-- `squareCategories` - 广场分类
+## Recent Major Changes
+- **Version Management**: Complete refactor from double-click to click-based interactions
+- **Event Architecture**: Eliminated all event delegation for direct binding
+- **UI Polish**: Added hover-reveal icons with smooth transitions
+- **Code Cleanup**: Removed all deprecated modal and confirmation logic

@@ -420,13 +420,46 @@ function loadVersionsToPanel(prompt) {
     if (prompt) {
         prompt.versions.forEach((version, index) => {
             const tag = document.createElement('button');
-            tag.className = `px-2 py-1 text-xs rounded-full flex-shrink-0 ${
+            tag.className = `px-2 py-1 text-xs rounded-full flex items-center version-tag group ${
                 index === currentVersionIndex 
                     ? 'bg-orange-500 text-white' 
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
             }`;
-            tag.textContent = version.name;
+            tag.style.display = 'inline-flex';
+            tag.style.alignItems = 'center';
+            tag.style.gap = '4px';
+            tag.style.whiteSpace = 'nowrap';
+            tag.setAttribute('data-version-index', index);
             tag.onclick = () => switchPanelVersion(prompt, index);
+            
+            // 版本名称
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = version.name;
+            nameSpan.className = 'version-name-text';
+            nameSpan.setAttribute('data-version-index', index);
+            tag.appendChild(nameSpan);
+            
+            // 添加铅笔图标 - 独立绑定click事件
+            const editIcon = document.createElement('button');
+            editIcon.className = 'edit-icon opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-blue-500 hover:text-blue-700';
+            editIcon.innerHTML = '<span class="w-4 h-4 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs">✎</span>';
+            editIcon.setAttribute('data-version-index', index);
+            editIcon.setAttribute('data-prompt-id', currentEditingPrompt);
+            editIcon.title = '重命名版本';
+            editIcon.addEventListener('click', handleVersionRenameByIcon);
+            
+            // 添加X删除图标 - 独立绑定click事件，禁止连锁反应
+            if (prompt.versions.length > 1) {
+                const deleteIcon = document.createElement('button');
+                deleteIcon.className = 'delete-icon opacity-0 group-hover:opacity-100 transition-opacity ml-1';
+                deleteIcon.innerHTML = '<span class="w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-xs">×</span>';
+                deleteIcon.setAttribute('data-version-index', index);
+                deleteIcon.setAttribute('data-prompt-id', currentEditingPrompt);
+                deleteIcon.title = '删除版本';
+                deleteIcon.addEventListener('click', handleVersionDeleteByIcon);
+                tag.appendChild(deleteIcon);
+            }
+            
             container.appendChild(tag);
         });
         
@@ -443,7 +476,13 @@ function loadVersionsToPanel(prompt) {
         
         document.getElementById('side-panel-content-input').value = '';
     }
+    
+    // 事件已独立绑定到各图标，无需额外绑定
 }
+
+
+
+
 
 // 切换面板版本
 function switchPanelVersion(prompt, index) {
@@ -720,21 +759,64 @@ function addVersion() {
     }
 }
 
-// 删除版本
-function deleteVersion(promptId, versionIndex) {
-    const prompt = prompts.find(p => p.id === promptId);
-    if (prompt && prompt.versions.length > 1) {
-        prompt.versions.splice(versionIndex, 1);
+
+// 新内联版本管理 - 即时添加版本
+function addVersionInline() {
+    const prompt = prompts.find(p => p.id === currentEditingPrompt);
+    if (!prompt && !currentEditingPrompt) {
+        // 新建状态下添加版本
+        const title = document.getElementById('side-panel-title-input').value || '未命名';
+        const category = document.getElementById('side-panel-category-input').value || '未分类';
+        const content = document.getElementById('side-panel-content-input').value;
         
-        // 确保currentVersion有效
-        if (prompt.currentVersion >= prompt.versions.length) {
-            prompt.currentVersion = prompt.versions.length - 1;
-        }
+        const newPrompt = {
+            id: Date.now().toString(),
+            title,
+            category,
+            userId: currentUser.username,
+            versions: [
+                { id: 'v1', name: '初始版本', content: content },
+                { id: 'v2', name: '版本2', content: '' }
+            ],
+            currentVersion: 1,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        
+        prompts.push(newPrompt);
+        currentEditingPrompt = newPrompt.id;
+        currentVersionIndex = 1;
+        
+        loadVersionsToPanel(newPrompt);
+        document.getElementById('side-panel-content-input').value = '';
+        document.getElementById('side-panel-content-input').focus();
         
         storage.set('prompts', prompts);
         loadPrompts();
-        manageVersions(promptId);
-        showToast('版本删除成功！');
+        
+        return;
+    }
+    
+    if (prompt) {
+        // 编辑状态下添加版本
+        const newVersionNumber = prompt.versions.length + 1;
+        const newVersionName = `版本${newVersionNumber}`;
+        
+        prompt.versions.push({
+            id: `v${newVersionNumber}`,
+            name: newVersionName,
+            content: ''
+        });
+        
+        currentVersionIndex = prompt.versions.length - 1;
+        prompt.currentVersion = currentVersionIndex;
+        
+        loadVersionsToPanel(prompt);
+        document.getElementById('side-panel-content-input').value = '';
+        document.getElementById('side-panel-content-input').focus();
+        
+        storage.set('prompts', prompts);
+        loadPrompts();
     }
 }
 
@@ -934,7 +1016,7 @@ function bindEvents() {
     document.getElementById('side-panel-save').addEventListener('click', handlePanelSave);
     
     // 版本管理
-    document.getElementById('add-version-btn').addEventListener('click', addVersion);
+    document.getElementById('add-version-btn').addEventListener('click', addVersionInline);
     
     // 添加版本弹窗
     document.getElementById('confirm-add-version').addEventListener('click', executeAddVersion);
@@ -972,6 +1054,102 @@ function bindEvents() {
             filterSquareByCategory(category);
         }
     });
+}
+
+// 任务1：单击铅笔图标重命名 - 独立事件绑定
+function handleVersionRenameByIcon(event) {
+    event.stopPropagation(); // 防止事件冒泡
+    
+    const versionIndex = parseInt(event.target.closest('button').getAttribute('data-version-index'));
+    const prompt = prompts.find(p => p.id === currentEditingPrompt);
+    if (!prompt) return;
+    
+    const nameElement = event.target.closest('button').querySelector('.version-name-text');
+    const originalName = nameElement.textContent;
+    
+    // 创建输入框进行内联重命名
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = originalName;
+    input.className = 'px-1 py-0.5 text-xs border border-orange-500 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 bg-transparent';
+    input.style.minWidth = '30px';
+    input.style.maxWidth = '80px';
+    
+    // 替换文本为输入框
+    nameElement.style.display = 'none';
+    nameElement.parentElement.insertBefore(input, nameElement);
+    
+    // 自动聚焦并选择文本
+    input.focus();
+    input.select();
+    
+    // 保存函数
+    const saveRename = () => {
+        const newName = input.value.trim() || originalName;
+        
+        // 更新数据
+        prompt.versions[versionIndex].name = newName;
+        storage.set('prompts', prompts);
+        loadPrompts();
+        loadVersionsToPanel(prompt);
+        
+        showToast('版本名称已更新');
+    };
+    
+    // 取消编辑函数
+    const cancelRename = () => {
+        nameElement.style.display = '';
+        input.remove();
+    };
+    
+    // 绑定事件
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            saveRename();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelRename();
+        }
+    });
+    
+    input.addEventListener('blur', saveRename);
+    
+    // 防止点击输入框时触发标签点击事件
+    input.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+}
+
+// 任务2：单击X图标独立删除 - 禁止连锁反应BUG
+function handleVersionDeleteByIcon(event) {
+    event.stopPropagation(); // 强制阻止事件冒泡，根绝连锁反应
+    
+    const versionIndex = parseInt(event.target.closest('button').getAttribute('data-version-index'));
+    const promptId = event.target.closest('button').getAttribute('data-prompt-id');
+    const prompt = prompts.find(p => p.id === promptId);
+    
+    if (!prompt || prompt.versions.length <= 1) return; // 安全保护
+    
+    // 立即执行删除，无确认弹窗
+    prompt.versions.splice(versionIndex, 1);
+    
+    // 智能切换激活状态
+    if (prompt.currentVersion >= prompt.versions.length) {
+        prompt.currentVersion = Math.max(0, prompt.versions.length - 1);
+    } else if (prompt.currentVersion === versionIndex) {
+        prompt.currentVersion = Math.max(0, versionIndex - 1);
+    } else if (prompt.currentVersion > versionIndex) {
+        prompt.currentVersion -= 1;
+    }
+    
+    // 更新当前版本索引
+    currentVersionIndex = prompt.currentVersion;
+    
+    storage.set('prompts', prompts);
+    loadPrompts();
+    loadVersionsToPanel(prompt);
+    showToast('版本已删除');
 }
 
 // 初始化应用
