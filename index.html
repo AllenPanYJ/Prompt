@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能提示词管理平台 - 灵感工作室</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+            background-color: #F5F1EB;
+        }
+        .card-shadow {
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        .card-shadow:hover {
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            transform: translateY(-1px);
+            transition: all 0.3s ease;
+        }
+        .version-tag {
+            transition: all 0.2s ease;
+        }
+        .version-tag:hover {
+            transform: scale(1.05);
+        }
+        .creative-gradient {
+            background: linear-gradient(135deg, #FF6B35 0%, #FF8E53 100%);
+        }
+        .page {
+            display: none;
+        }
+        .page.active {
+            display: block;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .line-clamp-3 {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .truncate {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- 顶部导航 -->
+    <nav class="bg-white card-shadow px-8 py-4" style="box-sizing: border-box;">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-8">
+                <h1 class="text-2xl font-bold text-gray-800">灵感工作室</h1>
+                <div class="flex space-x-6" id="nav-links">
+                    <a href="#" class="text-gray-600 hover:text-orange-500 font-medium nav-link" data-page="workbench">我的工作台</a>
+                    <a href="#" class="text-gray-600 hover:text-orange-500 font-medium nav-link" data-page="square">提示词广场</a>
+                    <a href="#" class="text-gray-600 hover:text-orange-500 font-medium nav-link hidden" data-page="admin" id="admin-link">后台管理</a>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4" id="user-menu">
+                <a href="#" class="text-gray-600 hover:text-orange-500 text-xl" data-page="settings" title="设置">
+                    <i class="fas fa-cog"></i>
+                </a>
+                <button class="px-4 py-2 text-gray-600 hover:text-gray-800" id="login-btn">
+                    <i class="fas fa-sign-in-alt mr-2"></i>登录
+                </button>
+                <div class="hidden" id="user-info">
+                    <span id="username-display" class="text-gray-700 mr-4"></span>
+                    <button class="text-gray-600 hover:text-gray-800" id="logout-btn">
+                        <i class="fas fa-sign-out-alt mr-2"></i>退出
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 浮动操作按钮 (FAB) -->
+    <button class="fixed bottom-8 right-8 w-14 h-14 bg-orange-500 text-white rounded-full shadow-lg hover:bg-orange-600 hover:scale-110 transition-all duration-200 z-50 hidden" id="fab-add-prompt" title="添加提示词">
+        <i class="fas fa-plus text-xl"></i>
+    </button>
+
+    <!-- 页面容器 -->
+    <main class="w-full px-8 py-8">
+        <!-- 登录/注册页面 -->
+        <div id="auth-page" class="page">
+            <div class="max-w-md mx-auto">
+                <div class="bg-white rounded-2xl p-8 card-shadow">
+                    <h2 class="text-2xl font-bold text-center mb-6" id="auth-title">登录账号</h2>
+                    <form id="auth-form">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">用户名</label>
+                            <input type="text" id="username" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500" required>
+                        </div>
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">密码</label>
+                            <input type="password" id="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500" required>
+                        </div>
+                        <button type="submit" class="w-full bg-orange-500 text-white py-2 rounded-lg hover:bg-orange-600 transition" id="auth-submit">
+                            登录
+                        </button>
+                        <p class="text-center mt-4 text-sm text-gray-600">
+                            <span id="auth-switch-text">还没有账号？</span>
+                            <a href="#" class="text-orange-500 hover:text-orange-600" id="auth-switch">立即注册</a>
+                        </p>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 我的工作台页面 -->
+        <div id="workbench-page" class="page">
+            <!-- 分类筛选器 -->
+            <div class="mb-6">
+                <div class="flex items-center space-x-2 overflow-x-auto pb-2" id="category-filters">
+                    <button class="px-4 py-2 bg-orange-500 text-white rounded-full text-sm font-medium whitespace-nowrap category-btn active" data-category="all">
+                        全部
+                    </button>
+                </div>
+            </div>
+
+            <!-- 飞书导入按钮 -->
+            <div class="mb-6 flex justify-between items-center">
+                <div class="flex space-x-4">
+                    <button class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition" id="import-flybook">
+                        <i class="fas fa-file-import mr-2"></i>从飞书导入
+                    </button>
+                </div>
+            </div>
+
+            <!-- 提示词卡片网格 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="prompts-grid">
+                <!-- 动态加载卡片 -->
+            </div>
+        </div>
+
+        <!-- 提示词广场页面 -->
+        <div id="square-page" class="page">
+            <!-- 广场分类筛选器 -->
+            <div class="mb-6">
+                <div class="flex items-center space-x-2 overflow-x-auto pb-2" id="square-category-filters">
+                    <button class="px-4 py-2 bg-orange-500 text-white rounded-full text-sm font-medium whitespace-nowrap square-category-btn active" data-category="all">
+                        全部
+                    </button>
+                </div>
+            </div>
+
+            <!-- 广场提示词卡片网格 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="square-prompts-grid">
+                <!-- 动态加载广场卡片 -->
+            </div>
+        </div>
+
+        <!-- 设置页面 -->
+        <div id="settings-page" class="page">
+            <div class="max-w-2xl">
+                <div class="bg-white rounded-2xl p-8 card-shadow">
+                    <h2 class="text-2xl font-bold mb-6">设置</h2>
+                    
+                    <!-- 飞书配置 -->
+                    <div class="mb-6">
+                        <h3 class="text-lg font-semibold mb-4">飞书集成设置</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">App ID</label>
+                                <input type="text" id="feishu-app-id" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500" placeholder="请输入飞书App ID">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">App Secret</label>
+                                <input type="password" id="feishu-app-secret" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500" placeholder="请输入飞书App Secret">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Table ID</label>
+                                <input type="text" id="feishu-table-id" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500" placeholder="请输入飞书表格ID">
+                            </div>
+                            <button class="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition" id="save-feishu-config">
+                                保存配置
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 后台管理页面 -->
+        <div id="admin-page" class="page">
+            <div>
+                <h2 class="text-2xl font-bold mb-6">后台管理</h2>
+                
+                <!-- 管理员操作区域 -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- 广场内容管理 -->
+                    <div class="bg-white rounded-2xl p-6 card-shadow">
+                        <h3 class="text-lg font-semibold mb-4">广场内容管理</h3>
+                        <button class="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition mb-4" id="add-square-prompt">
+                            <i class="fas fa-plus mr-2"></i>添加广场提示词
+                        </button>
+                        <div id="admin-square-prompts">
+                            <!-- 动态加载管理员广场提示词 -->
+                        </div>
+                    </div>
+
+                    <!-- 分类管理 -->
+                    <div class="bg-white rounded-2xl p-6 card-shadow">
+                        <h3 class="text-lg font-semibold mb-4">全局分类管理</h3>
+                        <div class="space-y-4" id="admin-categories">
+                            <!-- 动态加载管理员分类 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 侧滑式编辑面板 -->
+    <div id="side-panel" class="fixed inset-y-0 right-0 w-1/2 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out z-50">
+        <div class="h-full flex flex-col">
+            <!-- 单行布局的顶部 -->
+            <div class="p-4 border-b">
+                <div class="flex items-center space-x-4">
+                    <label class="text-xs font-medium text-gray-600 whitespace-nowrap">标题</label>
+                    <input type="text" id="side-panel-title-input" class="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-orange-500" placeholder="提示词标题">
+                    <label class="text-xs font-medium text-gray-600 whitespace-nowrap ml-2">分类</label>
+                    <input type="text" id="side-panel-category-input" class="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-orange-500" placeholder="分类名称">
+                </div>
+            </div>
+            
+            <!-- 版本管理标签行 -->
+            <div class="p-3 border-b bg-gray-50">
+                <div class="flex items-center space-x-2 overflow-x-auto" id="side-panel-versions">
+                    <!-- 动态加载版本标签 -->
+                </div>
+                <button type="button" id="add-version-btn" class="flex-shrink-0 text-xs text-orange-600 hover:text-orange-700 font-medium">
+                    <i class="fas fa-plus mr-1"></i>添加版本
+                </button>
+            </div>
+            
+            <!-- 最大化的内容区域 -->
+            <div class="flex-1 p-4">
+                <textarea id="side-panel-content-input" class="w-full h-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-orange-500 resize-none" placeholder="在此输入提示词内容..."></textarea>
+            </div>
+            
+            <!-- 底部操作区 -->
+            <div class="p-4 border-t">
+                <div class="flex justify-end">
+                    <button id="side-panel-save" class="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition">
+                        保存
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 侧滑面板遮罩层 -->
+    <div id="side-panel-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden"></div>
+
+    <!-- 版本编辑模态框 -->
+    <div id="version-modal" class="modal">
+        <div class="bg-white rounded-2xl p-8 card-shadow max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold mb-4">管理版本</h3>
+            <div id="version-list" class="mb-4 space-y-2">
+                <!-- 动态加载版本列表 -->
+            </div>
+            <div class="border-t pt-4">
+                <h4 class="font-semibold mb-2">添加新版本</h4>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">版本名称</label>
+                        <input type="text" id="new-version-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500" placeholder="如：优化版、v2.0">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">提示词内容</label>
+                        <textarea id="new-version-content" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500"></textarea>
+                    </div>
+                    <button class="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition" id="add-version-btn">
+                        添加版本
+                    </button>
+                </div>
+            </div>
+            <div class="flex justify-end mt-4">
+                <button type="button" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition" id="close-version-modal">
+                    关闭
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加新版本弹窗 -->
+    <div id="add-version-modal" class="modal">
+        <div class="bg-white rounded-2xl p-8 card-shadow max-w-md w-full mx-4">
+            <h3 class="text-xl font-bold mb-4">添加新版本</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">版本名称</label>
+                    <input type="text" id="add-version-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500" placeholder="如：优化版、v2.0">
+                </div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition" id="cancel-add-version">
+                        取消
+                    </button>
+                    <button type="button" class="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition" id="confirm-add-version">
+                        确认
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
